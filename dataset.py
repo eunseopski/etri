@@ -36,8 +36,11 @@ class HeadDataset(Dataset):
                 self.bboxes[ind].append(lin_list)
 
 
-
     def __getitem__(self, index):
+        # 타입: <class 'numpy.ndarray'>
+        # 데이터타입: uint8
+        # 값 범위: 0 ~ 255
+
         img = imread(osp.join(self.base_path, self.imgs_path[index]))
         labels = self.bboxes[index]
         annotations = np.zeros((0, 4))
@@ -52,17 +55,25 @@ class HeadDataset(Dataset):
 
             annotations = np.append(annotations, annotation, axis=0)
 
-        # ignore 부분을 다 없앴으니, 이것에 맞게 아래 함수들을 손보자.
-        target = self.filter_targets(annotations, img) # 이 함수 수정 필요
-        print("필터링한 box 개수:", len(annotations) - len(target))
+        target = self.filter_targets(annotations, img)
 
         # Preprocess (Data augmentation)
         target_dict = self.create_target_dict(img, target, index)
+        orig_target_dict = target_dict.copy()
+
+        if not self.is_train:
+            # image, bboxes, labels만 넘기기.
+            transform_keys = ['image', 'bboxes', 'labels']
+            target_dict = {k: v for k, v in target_dict.items() if k in transform_keys}
 
         transformed_dict = self.transforms(**target_dict)
-
         # Replace keys compaitible with Torch's FRCNN
         img, target = self.refine_transformation(transformed_dict)
+
+        if not self.is_train:
+            for k in ['image_id', 'area', 'iscrowd', 'visibilities']:
+                if k in orig_target_dict:  # 원본에서 키 가져오기
+                    target[k] = orig_target_dict[k]
 
         return img, target
 
@@ -94,29 +105,40 @@ class HeadDataset(Dataset):
         background class label. Refer to __getitem__ comment.
         """
         n_target = len(target)
-        # image_id = torch.tensor([index])
-        # visibilities = torch.ones((n_target), dtype=torch.float32)
-        # iscrowd = torch.zeros((n_target,), dtype=torch.int64)
+        image_id = torch.tensor([index])
+        visibilities = torch.ones((n_target), dtype=torch.float32)
+        iscrowd = torch.zeros((n_target,), dtype=torch.int64)
 
         # When there are no targets, set the BBOxes to 1pixel wide
         # and assign background label
-        if n_target == 0:
-            target, n_target = [[1, 2, 3, 4]], 1
+        # if n_target == 0:
+        #     target, n_target = [[1, 2, 3, 4]], 1
 
         boxes = np.array(target, dtype=np.float32)
-        labels = np.zeros((n_target,), dtype=np.int64)
+        labels = np.ones((n_target,), dtype=np.int64)
 
-        # area = torch.tensor(self.get_area(target))
+        area = torch.tensor(self.get_area(target))
 
-        target_dict = {
-                        'image' : img,
-                        'bboxes': boxes,
-                        'labels': labels,
-                        # 'image_id': image_id,
-                        # 'area': area,
-                        # 'iscrowd': iscrowd,
-                        # 'visibilities': visibilities,
-        }
+        if self.is_train:
+            target_dict = {
+                'image': img,
+                'bboxes': boxes,
+                'labels': labels,
+            #     'image_id': image_id,
+            #     'area': area,
+            #     'iscrowd': iscrowd,
+            #     'visibilities': visibilities,
+            }
+        else:
+            target_dict = {
+                'image': img,
+                'bboxes': boxes,
+                'labels': labels,
+                'image_id': image_id,
+                'area': area,
+                'iscrowd': iscrowd,
+                'visibilities': visibilities,
+            }
 
         # Need ignore label for CHuman evaluation
         if self.is_train:
@@ -145,16 +167,13 @@ class HeadDataset(Dataset):
                         # A.RandomSizedBBoxSafeCrop(width=self.shape[1],
                         #                           height=self.shape[0],
                         #                           erosion_rate=0., p=0.2), self.dataset_param
-                        # A.LongestMaxSize(max_size=1000, p=1.0),
-                        # A.PadIfNeeded(min_height=600, min_width=1000, border_mode=0, value=0, p=1.0),
-
                         A.LongestMaxSize(max_size=self.dataset_param[0], p=1.0),
                         A.PadIfNeeded(min_height=self.dataset_param[1], min_width=self.dataset_param[0], border_mode=0, value=0, p=1.0),
                         A.RGBShift(),
                         A.RandomBrightnessContrast(p=0.5),
                         A.HorizontalFlip(p=0.5),
                     ])
-
+        transforms.append(A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)))
         transforms.append(ToTensorV2())
         composed_transform = Compose(transforms,
                                      bbox_params=BboxParams(format='pascal_voc',
