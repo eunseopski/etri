@@ -20,7 +20,7 @@ class HeadDataset(Dataset):
     def __init__(self, base_path, txt_path, dataset_param, train=True):
         self.base_path = base_path
         self.bboxes = defaultdict(list)
-        self.dataset_param = dataset_param.get('shape', (1000, 600)) # H, W
+        self.dataset_param = dataset_param.get('shape', (1000, 600)) # W, H
         self.is_train = train
         self.transforms = self.get_transform()
 
@@ -75,6 +75,7 @@ class HeadDataset(Dataset):
                 if k in orig_target_dict:  # 원본에서 키 가져오기
                     target[k] = orig_target_dict[k]
 
+        img = img.float() / 255.0
         return img, target
 
 
@@ -124,10 +125,6 @@ class HeadDataset(Dataset):
                 'image': img,
                 'bboxes': boxes,
                 'labels': labels,
-            #     'image_id': image_id,
-            #     'area': area,
-            #     'iscrowd': iscrowd,
-            #     'visibilities': visibilities,
             }
         else:
             target_dict = {
@@ -162,18 +159,20 @@ class HeadDataset(Dataset):
 
     def get_transform(self):
         transforms = []
+
         if self.is_train:
             transforms.extend([
                         # A.RandomSizedBBoxSafeCrop(width=self.shape[1],
                         #                           height=self.shape[0],
                         #                           erosion_rate=0., p=0.2), self.dataset_param
-                        A.LongestMaxSize(max_size=self.dataset_param[0], p=1.0),
-                        A.PadIfNeeded(min_height=self.dataset_param[1], min_width=self.dataset_param[0], border_mode=0, value=0, p=1.0),
+                        # A.LongestMaxSize(max_size=self.dataset_param[1], p=1.0), # (1000, 600)
+                        # A.PadIfNeeded(min_height=self.dataset_param[0], min_width=self.dataset_param[1], border_mode=0, value=0, position='center', p=1.0),
+                        A.Resize(self.dataset_param[0], self.dataset_param[1]),
                         A.RGBShift(),
                         A.RandomBrightnessContrast(p=0.5),
                         A.HorizontalFlip(p=0.5),
                     ])
-        transforms.append(A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)))
+
         transforms.append(ToTensorV2())
         composed_transform = Compose(transforms,
                                      bbox_params=BboxParams(format='pascal_voc',
@@ -204,4 +203,3 @@ class HeadDataset(Dataset):
                                                       dtype=torch.int64)
         
         return img, transformed_dict
-

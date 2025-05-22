@@ -1,6 +1,7 @@
 DATASET:
     base_path: '/home/choi/hwang/workspace/etri/datasets'
     train: 'train/scut_head.txt'
+#    train: 'train/scut_head_for_test.txt'
     valid: 'valid/scut_head.txt'
 
     max_size: 1000
@@ -15,9 +16,10 @@ TRAINING:
     start_eval: 1
     eval_period: 1
     max_epoch: 20
+    AMP: True
 
 HYPER_PARAM:
-    learning_rate: 0.0001
+    learning_rate: 0.01
     momentum: 0.9
     weight_decay: 0.0005
     gamma: 0.5

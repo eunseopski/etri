@@ -6,12 +6,16 @@ from torchvision.models.detection import fasterrcnn_resnet50_fpn
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
 
+from torch.cuda.amp import autocast, GradScaler
 from collections import defaultdict
 import pandas as pd
-from brambox.stat import coordinates, mr_fppi, ap, pr, threshold, fscore, peak, lamr
+from brambox.stat import ap, pr, fscore, peak
 import argparse
 import yaml
 from tqdm import tqdm
+
+# import warnings
+# warnings.filterwarnings('ignore', category=UserWarning)
 
 import pdb
 from for_debuging import visualize_sample
@@ -28,12 +32,11 @@ DATASET_CONFIG = CONFIG['DATASET']
 TRAIN_CONFIG = CONFIG['TRAINING']
 HYP_CONFIG = CONFIG['HYPER_PARAM']
 NET_CONFIG = CONFIG['NETWORK']
-print(CONFIG)
 
 # train DataLoader
 dataset_param = {'shape': (DATASET_CONFIG["min_size"], DATASET_CONFIG["max_size"])}
 train_dataset = HeadDataset(base_path=DATASET_CONFIG["base_path"], txt_path=DATASET_CONFIG["train"], dataset_param=dataset_param, train=True)
-# visualize_sample(train_dataset, index=3) # train 이미지 시각화
+# visualize_sample(train_dataset, index=10) # train 이미지 시각화
 train_loader = DataLoader(train_dataset, batch_size=HYP_CONFIG["batch_size"], shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
 
 # val DataLoader
@@ -42,11 +45,11 @@ val_dataset = HeadDataset(base_path=DATASET_CONFIG["base_path"], txt_path=DATASE
 val_loader = DataLoader(val_dataset, batch_size=HYP_CONFIG["batch_size"], shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
 
 # Model
-# 모델은 이따 따로 폴더를 만들자. 먼저 torchvision에 있는 모델로 학습부터 하자.
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 # model = fasterrcnn_resnet50_fpn(pretrained=True)
-weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
-model = fasterrcnn_resnet50_fpn(weights=weights)
+# weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
+# model = fasterrcnn_resnet50_fpn(weights=weights)
+model = fasterrcnn_resnet50_fpn(weights=None)
 
 num_classes = 2
 in_features = model.roi_heads.box_predictor.cls_score.in_features # 1024
@@ -58,10 +61,11 @@ optimizer = torch.optim.SGD(params, lr=HYP_CONFIG['learning_rate'], momentum=HYP
 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=HYP_CONFIG['milestones'], gamma=HYP_CONFIG['gamma'])
 
 log_path = TRAIN_CONFIG['exp_name'] + '_log.txt'
+scaler = GradScaler()
 
 for epoch in range(TRAIN_CONFIG['max_epoch']):
 
-    ####################################### training
+    ################## training #####################
     model.train()
     progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{TRAIN_CONFIG['max_epoch']}")
     epoch_loss = 0.0
@@ -71,14 +75,26 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
         images = list(img.to(device) for img in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-        # compute loss
-        loss_dict = model(images, targets)
-        losses = sum(loss for loss in loss_dict.values())
-
-        # parameter update
         optimizer.zero_grad()
-        losses.backward()
-        optimizer.step()
+
+        # compute loss
+        if TRAIN_CONFIG['AMP']:
+            with autocast():
+                loss_dict = model(images, targets)
+                losses = sum(loss for loss in loss_dict.values())
+
+            # parameter update
+            scaler.scale(losses).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss_dict = model(images, targets)
+            losses = sum(loss for loss in loss_dict.values())
+
+            # parameter update
+            losses.backward()
+            optimizer.step()
+
 
         # update loss
         batch_loss = losses.item()
@@ -88,16 +104,16 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
 
     scheduler.step()
 
-    print(f"Epoch {epoch + 1}, Total Loss: {epoch_loss:.4f}")
+    print(f"\tAvg Loss: {epoch_loss/len(train_dataset)*HYP_CONFIG['batch_size']:.4f}")
     with open(log_path, "a") as f:
         f.write("Epoch %d, Loss=%.4f\n" % (epoch+1, epoch_loss))
 
     # save model
-    print("Saving model")
+    print(f"\tSaving model at output_weights/{TRAIN_CONFIG['exp_name']}_epoch{epoch+1}.pth")
     torch.save(model.state_dict(), f"output_weights/{TRAIN_CONFIG['exp_name']}_epoch{epoch+1}.pth")
 
 
-    ##################################### evaluation
+    ################### evaluation ##################
     model.eval()
 
     # results
@@ -106,7 +122,8 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
     results = {}
 
     # do inference
-    progress_bar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{TRAIN_CONFIG['max_epoch']}")
+    # progress_bar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{TRAIN_CONFIG['max_epoch']}")
+    progress_bar = tqdm(val_loader, desc="evaluate")
     for images, targets in progress_bar:
         # network forwarding
         images = list(img.to(device) for img in images)
@@ -120,7 +137,7 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
         # gt list
         gt_boxes = [gt['boxes'].numpy()for gt in targets]
 
-        # just to be sure target and prediction have batchsize 2
+        # checking prediction and gt
         assert len(gt_boxes) == len(pred_boxes)
 
         # for each image,
@@ -161,6 +178,7 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
         pred_df[col] = pred_df[col].astype('float64')
     for col in ['x_top_left', 'y_top_left', 'width', 'height']:
         gt_df[col] = gt_df[col].astype('float64')
+
     gt_df['ignore'] = False
 
     # compute precision & recall curve
@@ -169,23 +187,20 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
     # compute average precision (area under precision & recall curve)
     ap_ = ap(pr_)
 
-    # compute MR-FPPI curve
-    mr_fppi_ = mr_fppi(pred_df, gt_df, threshold=0.5,  ignore=True)
-
-    # compute log-average miss rate (LAMR)
-    lamr_ = lamr(mr_fppi_)
-
     # compute f1-score
     f1_ = fscore(pr_)
     f1_ = f1_.fillna(0)
     threshold_ = peak(f1_)
+
+    # moda = get_moda(pred_df, gt_df, threshold=0.2, ignore=True)
+    # modp = get_modp(pred_df, gt_df, threshold=0.2, ignore=True)
 
     # compute precision & recall
     row = pr_[pr_['confidence'] == threshold_['confidence']].iloc[0]
     precision_ = row['precision']
     recall_ = row['recall']
 
-    print('AP=%.4f, F1=%.4f, precision=%.4f, recall=%.4f' % (ap_, threshold_.f1, precision_, recall_))
+    print('\tAP=%.4f, F1=%.4f, precision=%.4f, recall=%.4f' % (ap_, threshold_.f1, precision_, recall_))
     with open(log_path, "a") as f:
         f.write("Epoch %d, AP=%.4f, F1=%.4f, precision=%.4f, recall=%.4f\n" % (epoch+1, ap_, threshold_.f1, precision_, recall_))
 
