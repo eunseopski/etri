@@ -1,7 +1,6 @@
 DATASET:
     base_path: '/home/choi/hwang/workspace/etri/datasets'
     train: 'train/scut_head.txt'
-#    train: 'train/scut_head_for_test.txt'
     valid: 'valid/scut_head.txt'
 
     max_size: 1000
@@ -15,7 +14,7 @@ TRAINING:
     save_dir: '/home/choi/hwang/workspace/HeadHunter/output_weights'
     start_eval: 1
     eval_period: 1
-    max_epoch: 20
+    max_epoch: 100
     AMP: True
 
 HYPER_PARAM:
@@ -24,7 +23,7 @@ HYPER_PARAM:
     weight_decay: 0.0005
     gamma: 0.5
     milestones: [5, 10, 15]
-    batch_size: 12
+    batch_size: 4
 
 
 NETWORK:

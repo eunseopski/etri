@@ -1,3 +1,4 @@
+import os
 import torch
 from torch.utils.data import DataLoader
 from dataset import HeadDataset
@@ -47,9 +48,9 @@ val_loader = DataLoader(val_dataset, batch_size=HYP_CONFIG["batch_size"], shuffl
 # Model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 # model = fasterrcnn_resnet50_fpn(pretrained=True)
-# weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
-# model = fasterrcnn_resnet50_fpn(weights=weights)
-model = fasterrcnn_resnet50_fpn(weights=None)
+weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
+model = fasterrcnn_resnet50_fpn(weights=weights)
+# model = fasterrcnn_resnet50_fpn(weights=None)
 
 num_classes = 2
 in_features = model.roi_heads.box_predictor.cls_score.in_features # 1024
@@ -62,6 +63,9 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=HYP_CONFI
 
 log_path = TRAIN_CONFIG['exp_name'] + '_log.txt'
 scaler = GradScaler()
+
+best_f1_path = ""
+best_f1 = 0.0
 
 for epoch in range(TRAIN_CONFIG['max_epoch']):
 
@@ -95,7 +99,6 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
             losses.backward()
             optimizer.step()
 
-
         # update loss
         batch_loss = losses.item()
         epoch_loss += batch_loss
@@ -107,10 +110,6 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
     print(f"\tAvg Loss: {epoch_loss/len(train_dataset)*HYP_CONFIG['batch_size']:.4f}")
     with open(log_path, "a") as f:
         f.write("Epoch %d, Loss=%.4f\n" % (epoch+1, epoch_loss))
-
-    # save model
-    print(f"\tSaving model at output_weights/{TRAIN_CONFIG['exp_name']}_epoch{epoch+1}.pth")
-    torch.save(model.state_dict(), f"output_weights/{TRAIN_CONFIG['exp_name']}_epoch{epoch+1}.pth")
 
 
     ################### evaluation ##################
@@ -127,7 +126,8 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
     for images, targets in progress_bar:
         # network forwarding
         images = list(img.to(device) for img in images)
-        outputs = model(images)
+        with torch.no_grad():
+            outputs = model(images) # 속도가 오래 걸리진 않아서 AMP를 안써도 될 듯.
         outputs = [{k: v.detach().cpu() for k, v in t.items()} for t in outputs]
 
         # pred list
@@ -145,9 +145,8 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
             im_name = str(targets[j]['image_id'].item()) + '.jpg'
 
             # write to results dict for MOT format
-            results[targets[j]['image_id'].item()] = {'boxes': pred_boxes[j],
-                                                      'scores': pred_scores[j]}
-            for _, (p_b, p_s) in enumerate(zip(pred_boxes[j], pred_scores[j])):
+            results[targets[j]['image_id'].item()] = {'boxes': pred_boxes[j], 'scores': pred_scores[j]}
+            for p_b, p_s in zip(pred_boxes[j], pred_scores[j]):
                 pred_dict['image'].append(im_name)
                 pred_dict['class_label'].append('head')
                 pred_dict['id'].append(0)
@@ -157,7 +156,7 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
                 pred_dict['height'].append(p_b[3] - p_b[1])
                 pred_dict['confidence'].append(p_s)
 
-            for _, gt_b in enumerate(gt_boxes[j]):
+            for gt_b in gt_boxes[j]:
                 gt_dict['image'].append(im_name)
                 gt_dict['class_label'].append('head')
                 gt_dict['id'].append(0)
@@ -166,6 +165,9 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
                 gt_dict['width'].append(gt_b[2] - gt_b[0])
                 gt_dict['height'].append(gt_b[3] - gt_b[1])
                 gt_dict['ignore'].append(0)
+
+            if len(pred_boxes[j]) == 0:
+                print("객체 검출 실패:", im_name)
 
 
     # gather the stats from all processes
@@ -201,7 +203,22 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
     recall_ = row['recall']
 
     print('\tAP=%.4f, F1=%.4f, precision=%.4f, recall=%.4f' % (ap_, threshold_.f1, precision_, recall_))
+
+    save_path_weight = f"output_weights/{TRAIN_CONFIG['exp_name']}_epoch{epoch+1}.pth"
+    # best f1만 저장
+    if best_f1 < threshold_.f1:
+        best_f1 = threshold_.f1
+
+        print(f"\tSaving model at {save_path_weight}")
+        torch.save(model.state_dict(), f"{save_path_weight}")
+
+        if best_f1_path:
+            os.remove(best_f1_path)
+            print(f"\tRemove model at {best_f1_path}")
+
+        best_f1_path = save_path_weight
+
     with open(log_path, "a") as f:
         f.write("Epoch %d, AP=%.4f, F1=%.4f, precision=%.4f, recall=%.4f\n" % (epoch+1, ap_, threshold_.f1, precision_, recall_))
-
+    print('\n')
 
