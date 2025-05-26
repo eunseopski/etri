@@ -3,12 +3,13 @@ DATASET:
     train: 'train/scut_head.txt'
     valid: 'valid/scut_head.txt'
 
+    mean_std: [[118.14, 110.79, 104.97], [64.45, 64.44, 65.16]]
     max_size: 1000
     min_size: 600
 
 
 TRAINING:
-    exp_name: 'SCUT_up_F'
+    exp_name: 'SCUT_HDHT_ori_faster_rcnn'
     backbone : 'resnet50'
     pretrained_model: ''
     save_dir: '/home/choi/hwang/workspace/HeadHunter/output_weights'
@@ -29,9 +30,16 @@ HYPER_PARAM:
 NETWORK:
     use_deform: False
     ohem: True
-    context: 'cpm'
+    context: # cpm, deform_ssh, ssh
     custom_sampling: False
     soft_nms: False
     upscale_rpn: False
     median_anchors: True # comb_anchors = ((12,), (32,), (64,), (112,))  # 4개의 anchor로 설정
+    anchors:
+      - [12]
+      - [32]
+      - [112]
+      - [256]
+    aspect_ratios:
+      - [0.5, 1.0, 1.5]
 
