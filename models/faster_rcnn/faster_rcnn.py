@@ -290,8 +290,8 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, ohem
     labels = torch.cat(labels, dim=0)
     regression_targets = torch.cat(regression_targets, dim=0)
 
-    # classification_loss = F.cross_entropy(class_logits, labels)
-    classification_loss = ohem_loss(class_logits, labels, ohem_proposal)
+    classification_loss = F.cross_entropy(class_logits, labels)
+    # classification_loss = ohem_loss(class_logits, labels, ohem_proposal)
     # get indices that correspond to the regression targets for
     # the corresponding ground truth labels, to be used with
     # advanced indexing

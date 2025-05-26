@@ -56,10 +56,7 @@ def conv_dw(inp, oup, stride, leaky=0.1):
 
 def create_contexts(context, out_channels, n_levels, **kwargs):
     contexts = []
-    print("context", context)
-
     if context is None:
-        print("이거 실행 안되냐?")
         return
     if context.lower() == 'cpm':
         context_module = CPM

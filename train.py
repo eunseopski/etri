@@ -9,6 +9,7 @@ from models.faster_rcnn import compute_mean_std
 
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
+from torchvision.models.detection import fasterrcnn_resnet50_fpn
 
 from torch.cuda.amp import autocast, GradScaler
 from collections import defaultdict
@@ -17,6 +18,7 @@ from brambox.stat import ap, pr, fscore, peak
 import argparse
 import yaml
 from tqdm import tqdm
+import wandb
 
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
@@ -59,6 +61,7 @@ if DATASET_CONFIG is not None:
 else:
     dataset_mean, dataset_std = compute_mean_std(DATASET_CONFIG["base_path"]+'/'+DATASET_CONFIG["train"], DATASET_CONFIG["base_path"])
     print("dataset_mean, dataset_std:", dataset_mean, dataset_std)
+
 kwargs['image_mean'] = dataset_mean
 kwargs['image_std'] = dataset_std
 kwargs['min_size'] = DATASET_CONFIG['min_size']
@@ -79,7 +82,7 @@ model = customRCNN(cfg=cfg,
                         upscale_rpn=NET_CONFIG['upscale_rpn'],
                         median_anchors=NET_CONFIG['median_anchors'],
                         **kwargs).cuda()
-print(model)
+# print(model)
 
 
 num_classes = 2
@@ -97,15 +100,23 @@ scaler = GradScaler()
 best_f1_path = ""
 best_f1 = 0.0
 
+wandb.init(project="HDHT_detection", name=TRAIN_CONFIG['exp_name'], config={
+    "batch_size": HYP_CONFIG["batch_size"],
+    "lr": optimizer.param_groups[0]['lr'],
+    "epochs": TRAIN_CONFIG['max_epoch'],
+})
+iter_count = 0
+
+
 for epoch in range(TRAIN_CONFIG['max_epoch']):
 
     ################## training #####################
     model.train()
     progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{TRAIN_CONFIG['max_epoch']}")
     epoch_loss = 0.0
+    wandb_log_interval=10
 
     for images, targets in progress_bar:
-
         images = list(img.to(device) for img in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
@@ -134,6 +145,15 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
         epoch_loss += batch_loss
 
         progress_bar.set_postfix(loss=batch_loss)
+
+        # wandb logging per iteration
+        if wandb.run is not None and iter_count % wandb_log_interval == 0:
+            wandb.log({
+                "iter_loss": batch_loss,
+                "lr": optimizer.param_groups[0]['lr'],
+            }, step=iter_count)
+
+        iter_count += 1
 
     scheduler.step()
 
@@ -247,6 +267,14 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
             print(f"\tRemove model at {best_f1_path}")
 
         best_f1_path = save_path_weight
+
+    if wandb.run is not None:  # wandb.init() 했는지 체크
+        wandb.log({
+            "AP": ap_,
+            "F1": threshold_.f1,
+            "precision": precision_,
+            "recall": recall_,
+            })
 
     with open(log_path, "a") as f:
         f.write("Epoch %d, AP=%.4f, F1=%.4f, precision=%.4f, recall=%.4f\n" % (epoch+1, ap_, threshold_.f1, precision_, recall_))

@@ -4,6 +4,7 @@ datasets/SCUT_HEAD
 __pycache__/
 output_weights/
 reference/
+wandb/
 
 datasets/train/scut_head*.txt
 *_log.txt
