@@ -22,6 +22,7 @@ from .config import cfg_res50_4fpn as cfg
 from .nms import soft_nms_pytorch
 
 import pdb
+from pdb import set_trace
 
 
 class FasterRCNN(GeneralizedRCNN):

@@ -10,8 +10,7 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from .faster_rcnn import FasterRCNN
 from .net import BackBoneWithFPN
 
-def create_backbone(cfg, use_deform=False,
-                    context=None, default_filter=False):
+def create_backbone(cfg, context=None, default_filter=False):
     """Creates backbone """
     in_channels = cfg['in_channel']    
     if cfg['name'] == 'Resnet50':
@@ -39,7 +38,6 @@ def create_backbone(cfg, use_deform=False,
                                         in_channels_list,
                                         out_channels,
                                         context_module=context,
-                                        use_deform=use_deform,
                                         default_filter=default_filter)
     return backbone_with_fpn
 
@@ -54,8 +52,7 @@ def customRCNN(cfg, use_deform=False,
     Calls a Faster-RCNN head with custom arguments + our backbone
     """
 
-    backbone_with_fpn = create_backbone(cfg=cfg, use_deform=use_deform,
-                                        context=context,
+    backbone_with_fpn = create_backbone(cfg=cfg, context=context,
                                         default_filter=default_filter)
     if median_anchors:
         anchor_sizes = cfg['anchor_sizes']
@@ -65,14 +62,6 @@ def customRCNN(cfg, use_deform=False,
         rpn_anchor_generator = AnchorGenerator(anchor_sizes,
                                            aspect_ratios)
         kwargs['rpn_anchor_generator'] = rpn_anchor_generator
-
-    if custom_sampling:
-        # Random hand thresholding ablation experiment to understand difference
-        # in behaviour of Body vs head bounding boxes
-        kwargs['rpn_fg_iou_thresh'] = 0.5
-        kwargs['box_bg_iou_thresh'] = 0.4
-        kwargs['box_positive_fraction'] = 0.5
-        # kwargs['box_nms_thresh'] = 0.7
 
     kwargs['cfg'] = cfg
     model = FasterRCNN(backbone_with_fpn, num_classes=2, ohem=ohem, soft_nms=soft_nms,

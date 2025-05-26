@@ -222,12 +222,10 @@ class BackBoneWithFPN(nn.Module):
                  in_channels_list,
                  out_channels,
                  context_module=None,
-                 use_deform=False,
                  default_filter=False):
 
         self.ssh_list = []
         super(BackBoneWithFPN, self).__init__()
-        kwargs = {'default_filter':default_filter}
 
         self.body = _utils.IntermediateLayerGetter(backbone, return_layers=return_layers)
         # To Support older version

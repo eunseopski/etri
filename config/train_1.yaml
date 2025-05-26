@@ -9,7 +9,7 @@ DATASET:
 
 
 TRAINING:
-    exp_name: 'SCUT_HDHT_ori_faster_rcnn_anchor2'
+    exp_name: 'SCUT_HDHT_ori_faster_rcnn_anchor4'
     backbone : 'resnet50'
     pretrained_model: ''
     save_dir: '/home/choi/hwang/workspace/HeadHunter/output_weights'
@@ -28,10 +28,8 @@ HYPER_PARAM:
 
 
 NETWORK:
-    use_deform: False
     ohem: False
     context: # cpm, deform_ssh, ssh
-    custom_sampling: False
     soft_nms: False
     upscale_rpn: False
     median_anchors: True # comb_anchors = ((12,), (32,), (64,), (112,))  # 4개의 anchor로 설정
@@ -45,15 +43,20 @@ NETWORK:
 #      - [36]
 #      - [72]
 #      - [128]
+    anchors:
+        - [32]
+        - [64]
+        - [128]
+        - [256]
 #    anchors:
+#        - [12]
 #        - [32]
 #        - [64]
-#        - [128]
-#        - [256]
-    anchors:
-        - [18]
-        - [36]
-        - [72]
-        - [128]
+#        - [112]
+#    anchors:
+#        - [12, 32]
+#        - [64, 112]
+#        - [196, 256]
+#        - [384, 512]
     aspect_ratios:
       - [0.5, 1.0, 1.5]

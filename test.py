@@ -2,6 +2,9 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from models.faster_rcnn.config import cfg_res50_4fpn
+from models.faster_rcnn import compute_mean_std
+from models.faster_rcnn.head_detect import customRCNN
 
 from dataset import HeadDataset
 
@@ -12,8 +15,16 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 from brambox.stat import mr_fppi, ap, pr, fscore, peak, lamr
-
+import argparse
 import cv2
+import yaml
+
+#parser
+parser = argparse.ArgumentParser(description='Testing')
+parser.add_argument('--model_path', required=True, help='path to config file')
+parser.add_argument('--config', required=True, help='path to config file')
+args = parser.parse_args()
+
 
 # options
 visualize = False
@@ -22,9 +33,46 @@ visualize = False
 val_dataset = HeadDataset(base_path="./datasets", txt_path="test/scut_head.txt",train=False)
 val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
 
+
+# config file
+with open(args.config, 'r') as stream:
+    CONFIG = yaml.safe_load(stream)
+DATASET_CONFIG = CONFIG['DATASET']
+TRAIN_CONFIG = CONFIG['TRAINING']
+HYP_CONFIG = CONFIG['HYPER_PARAM']
+NET_CONFIG = CONFIG['NETWORK']
+
+# Prepare cfg and kwargs
+anchors = {'anchor_sizes' : tuple(tuple(x) for x in NET_CONFIG['anchors']),
+					'aspect_ratios' : tuple(tuple(x) for x in NET_CONFIG['aspect_ratios']) * len(NET_CONFIG['anchors']),}
+cfg = {**cfg_res50_4fpn, **anchors}
+kwargs = {}
+
+
+if DATASET_CONFIG is not None:
+    dataset_mean = [i / 255. for i in DATASET_CONFIG['mean_std'][0]]
+    dataset_std = [i / 255. for i in DATASET_CONFIG['mean_std'][1]]
+else:
+    dataset_mean, dataset_std = compute_mean_std(DATASET_CONFIG["base_path"]+'/'+DATASET_CONFIG["train"], DATASET_CONFIG["base_path"])
+    print("dataset_mean, dataset_std:", dataset_mean, dataset_std)
+kwargs['image_mean'] = dataset_mean
+kwargs['image_std'] = dataset_std
+kwargs['min_size'] = DATASET_CONFIG['min_size']
+kwargs['max_size'] = DATASET_CONFIG['max_size']
+kwargs['box_detections_per_img'] = 300  # increase max det to max val in our benchmark
+
 # define model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-model = fasterrcnn_resnet50_fpn(pretrained=True)
+model = customRCNN(cfg=cfg,
+                        use_deform=NET_CONFIG['use_deform'],
+                        ohem=NET_CONFIG['ohem'],
+                        context=NET_CONFIG['context'],
+                        custom_sampling=NET_CONFIG['custom_sampling'],
+                        default_filter=False,
+                        soft_nms=NET_CONFIG['soft_nms'],
+                        upscale_rpn=NET_CONFIG['upscale_rpn'],
+                        median_anchors=NET_CONFIG['median_anchors'],
+                        **kwargs).cuda()
 
 # modify model
 num_classes = 2
@@ -32,7 +80,7 @@ in_features = model.roi_heads.box_predictor.cls_score.in_features
 model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
 # load model
-model.load_state_dict(torch.load("/home/choi/hwang/workspace/etri/output_weights/SCUT_base_epoch20.pth"))
+model.load_state_dict(torch.load(args.model_path))
 model.eval()
 model.to(device)
 

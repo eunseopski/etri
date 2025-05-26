@@ -73,10 +73,8 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 # weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
 # model = fasterrcnn_resnet50_fpn(weights=weights)
 model = customRCNN(cfg=cfg,
-                        use_deform=NET_CONFIG['use_deform'],
                         ohem=NET_CONFIG['ohem'],
                         context=NET_CONFIG['context'],
-                        custom_sampling=NET_CONFIG['custom_sampling'],
                         default_filter=False,
                         soft_nms=NET_CONFIG['soft_nms'],
                         upscale_rpn=NET_CONFIG['upscale_rpn'],
