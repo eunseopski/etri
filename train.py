@@ -1,9 +1,12 @@
 import os
 import torch
 from torch.utils.data import DataLoader
-from dataset import HeadDataset
 
-from torchvision.models.detection import fasterrcnn_resnet50_fpn
+from dataset import HeadDataset
+from models.faster_rcnn.config import cfg_res50_4fpn
+from models.faster_rcnn.head_detect import customRCNN
+from models.faster_rcnn import compute_mean_std
+
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
 
@@ -15,8 +18,8 @@ import argparse
 import yaml
 from tqdm import tqdm
 
-# import warnings
-# warnings.filterwarnings('ignore', category=UserWarning)
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
 
 import pdb
 from for_debuging import visualize_sample
@@ -45,12 +48,39 @@ val_dataset = HeadDataset(base_path=DATASET_CONFIG["base_path"], txt_path=DATASE
 # visualize_sample(val_dataset, index=3) # valid 이미지 시각화
 val_loader = DataLoader(val_dataset, batch_size=HYP_CONFIG["batch_size"], shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
 
+# Prepare cfg and kwargs
+anchors = {'anchor_sizes' : tuple(tuple(x) for x in NET_CONFIG['anchors']),
+					'aspect_ratios' : tuple(tuple(x) for x in NET_CONFIG['aspect_ratios']) * len(NET_CONFIG['anchors']),}
+cfg = {**cfg_res50_4fpn, **anchors}
+kwargs = {}
+if DATASET_CONFIG is not None:
+    dataset_mean = [i / 255. for i in DATASET_CONFIG['mean_std'][0]]
+    dataset_std = [i / 255. for i in DATASET_CONFIG['mean_std'][1]]
+else:
+    dataset_mean, dataset_std = compute_mean_std(DATASET_CONFIG["base_path"]+'/'+DATASET_CONFIG["train"], DATASET_CONFIG["base_path"])
+    print("dataset_mean, dataset_std:", dataset_mean, dataset_std)
+kwargs['image_mean'] = dataset_mean
+kwargs['image_std'] = dataset_std
+kwargs['min_size'] = DATASET_CONFIG['min_size']
+kwargs['max_size'] = DATASET_CONFIG['max_size']
+kwargs['box_detections_per_img'] = 300  # increase max det to max val in our benchmark
+
 # Model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-# model = fasterrcnn_resnet50_fpn(pretrained=True)
-weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
-model = fasterrcnn_resnet50_fpn(weights=weights)
-# model = fasterrcnn_resnet50_fpn(weights=None)
+# weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
+# model = fasterrcnn_resnet50_fpn(weights=weights)
+model = customRCNN(cfg=cfg,
+                        use_deform=NET_CONFIG['use_deform'],
+                        ohem=NET_CONFIG['ohem'],
+                        context=NET_CONFIG['context'],
+                        custom_sampling=NET_CONFIG['custom_sampling'],
+                        default_filter=False,
+                        soft_nms=NET_CONFIG['soft_nms'],
+                        upscale_rpn=NET_CONFIG['upscale_rpn'],
+                        median_anchors=NET_CONFIG['median_anchors'],
+                        **kwargs).cuda()
+print(model)
+
 
 num_classes = 2
 in_features = model.roi_heads.box_predictor.cls_score.in_features # 1024
