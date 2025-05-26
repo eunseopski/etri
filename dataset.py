@@ -17,7 +17,7 @@ import pdb
 
 
 class HeadDataset(Dataset):
-    def __init__(self, base_path, txt_path, dataset_param, train=True):
+    def __init__(self, base_path, txt_path, dataset_param={}, train=True):
         self.base_path = base_path
         self.bboxes = defaultdict(list)
         self.dataset_param = dataset_param.get('shape', (1000, 600)) # W, H
