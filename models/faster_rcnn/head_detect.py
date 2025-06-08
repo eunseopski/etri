@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
-
+import pdb
 from collections import OrderedDict
+from torchvision.ops import misc as misc_nn_ops
 
 import torch
 import torchvision.models as models
@@ -14,7 +15,13 @@ def create_backbone(cfg, context=None, default_filter=False):
     """Creates backbone """
     in_channels = cfg['in_channel']    
     if cfg['name'] == 'Resnet50':
+
         feat_ext = models.resnet50(pretrained=cfg['pretrain'])
+
+        # feat_ext = models.resnet50(
+        #     pretrained=cfg['pretrain'],
+        #     norm_layer=misc_nn_ops.FrozenBatchNorm2d
+        # )
         if len(cfg['return_layers']) == 3:
             in_channels_list = [
                 in_channels * 2,
@@ -57,10 +64,7 @@ def customRCNN(cfg, use_deform=False,
     if median_anchors:
         anchor_sizes = cfg['anchor_sizes']
         aspect_ratios = cfg['aspect_ratios']
-        print("anchor_sizes:", anchor_sizes)
-        print("aspect_ratios:", aspect_ratios)
-        rpn_anchor_generator = AnchorGenerator(anchor_sizes,
-                                           aspect_ratios)
+        rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios)
         kwargs['rpn_anchor_generator'] = rpn_anchor_generator
 
     kwargs['cfg'] = cfg

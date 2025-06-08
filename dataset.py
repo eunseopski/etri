@@ -56,7 +56,6 @@ class HeadDataset(Dataset):
             annotations = np.append(annotations, annotation, axis=0)
 
         target = self.filter_targets(annotations, img)
-
         # Preprocess (Data augmentation)
         target_dict = self.create_target_dict(img, target, index)
         orig_target_dict = target_dict.copy()
@@ -74,7 +73,6 @@ class HeadDataset(Dataset):
             for k in ['image_id', 'area', 'iscrowd', 'visibilities']:
                 if k in orig_target_dict:  # 원본에서 키 가져오기
                     target[k] = orig_target_dict[k]
-
         img = img.float() / 255.0
         return img, target
 
@@ -165,8 +163,6 @@ class HeadDataset(Dataset):
                         # A.RandomSizedBBoxSafeCrop(width=self.shape[1],
                         #                           height=self.shape[0],
                         #                           erosion_rate=0., p=0.2), self.dataset_param
-                        # A.LongestMaxSize(max_size=self.dataset_param[1], p=1.0), # (1000, 600)
-                        # A.PadIfNeeded(min_height=self.dataset_param[0], min_width=self.dataset_param[1], border_mode=0, value=0, position='center', p=1.0),
                         A.Resize(self.dataset_param[0], self.dataset_param[1]),
                         A.RGBShift(),
                         A.RandomBrightnessContrast(p=0.5),
@@ -178,7 +174,9 @@ class HeadDataset(Dataset):
                                      bbox_params=BboxParams(format='pascal_voc',
                                                             min_area=0,
                                                             min_visibility=0,
-                                                            label_fields=['labels']))
+                                                            label_fields=['labels']),
+                                                            )
+
         return composed_transform
 
 

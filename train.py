@@ -11,7 +11,6 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
 
-from torch.cuda.amp import autocast, GradScaler
 from collections import defaultdict
 import pandas as pd
 from brambox.stat import ap, pr, fscore, peak
@@ -66,34 +65,43 @@ kwargs['image_mean'] = dataset_mean
 kwargs['image_std'] = dataset_std
 kwargs['min_size'] = DATASET_CONFIG['min_size']
 kwargs['max_size'] = DATASET_CONFIG['max_size']
-kwargs['box_detections_per_img'] = 300  # increase max det to max val in our benchmark
+kwargs['box_detections_per_img'] = 100  # increase max det to max val in our benchmark
 
 # Model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-# weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
-# model = fasterrcnn_resnet50_fpn(weights=weights)
-model = customRCNN(cfg=cfg,
-                        ohem=NET_CONFIG['ohem'],
-                        context=NET_CONFIG['context'],
-                        default_filter=False,
-                        soft_nms=NET_CONFIG['soft_nms'],
-                        upscale_rpn=NET_CONFIG['upscale_rpn'],
-                        median_anchors=NET_CONFIG['median_anchors'],
-                        **kwargs).cuda()
+
+model = fasterrcnn_resnet50_fpn(pretrained_backbone=True, weights = None)
+in_features = model.roi_heads.box_predictor.cls_score.in_features # 1024
+model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=2)
+
+# model = customRCNN(cfg=cfg,
+#                         ohem=NET_CONFIG['ohem'],
+#                         context=NET_CONFIG['context'],
+#                         default_filter=False,
+#                         soft_nms=NET_CONFIG['soft_nms'],
+#                         upscale_rpn=NET_CONFIG['upscale_rpn'],
+#                         median_anchors=NET_CONFIG['median_anchors'],
+#                         **kwargs).cuda()
+print(model)
+if TRAIN_CONFIG['pretrained_model']:
+    state_dict = torch.load(TRAIN_CONFIG['pretrained_model'], map_location=device)
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        new_key = k.replace("module.", "")  # 앞에 "module."만 제거
+        new_state_dict[new_key] = v
+    # for k in model.state_dict().keys():
+    #     print(k)
+    # print("-="*50)
+    # for k in state_dict.keys():
+    #     print(k)
+    model.load_state_dict(new_state_dict, strict=True)
 # print(model)
 
-
-num_classes = 2
-in_features = model.roi_heads.box_predictor.cls_score.in_features # 1024
-model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 model.to(device)
 
 params = [p for p in model.parameters() if p.requires_grad]
 optimizer = torch.optim.SGD(params, lr=HYP_CONFIG['learning_rate'], momentum=HYP_CONFIG['momentum'], weight_decay=HYP_CONFIG['weight_decay'])
 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=HYP_CONFIG['milestones'], gamma=HYP_CONFIG['gamma'])
-
-log_path = TRAIN_CONFIG['exp_name'] + '_log.txt'
-scaler = GradScaler()
 
 best_f1_path = ""
 best_f1 = 0.0
@@ -110,33 +118,21 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
 
     ################## training #####################
     model.train()
-    progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{TRAIN_CONFIG['max_epoch']}")
     epoch_loss = 0.0
-    wandb_log_interval=10
+    wandb_log_interval=30
 
+    progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{TRAIN_CONFIG['max_epoch']}")
     for images, targets in progress_bar:
         images = list(img.to(device) for img in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
+        loss_dict = model(images, targets)
+        losses = sum(loss for loss in loss_dict.values())
+
+        # parameter update
         optimizer.zero_grad()
-
-        # compute loss
-        if TRAIN_CONFIG['AMP']:
-            with autocast():
-                loss_dict = model(images, targets)
-                losses = sum(loss for loss in loss_dict.values())
-
-            # parameter update
-            scaler.scale(losses).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss_dict = model(images, targets)
-            losses = sum(loss for loss in loss_dict.values())
-
-            # parameter update
-            losses.backward()
-            optimizer.step()
+        losses.backward()
+        optimizer.step()
 
         # update loss
         batch_loss = losses.item()
@@ -156,8 +152,6 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
     scheduler.step()
 
     print(f"\tAvg Loss: {epoch_loss/len(train_dataset)*HYP_CONFIG['batch_size']:.4f}")
-    with open(log_path, "a") as f:
-        f.write("Epoch %d, Loss=%.4f\n" % (epoch+1, epoch_loss))
 
 
     ################### evaluation ##################
@@ -274,7 +268,5 @@ for epoch in range(TRAIN_CONFIG['max_epoch']):
             "recall": recall_,
             })
 
-    with open(log_path, "a") as f:
-        f.write("Epoch %d, AP=%.4f, F1=%.4f, precision=%.4f, recall=%.4f\n" % (epoch+1, ap_, threshold_.f1, precision_, recall_))
     print('\n')
 
