@@ -31,7 +31,7 @@ visualize = False
 
 # load validation dataset
 val_dataset = HeadDataset(base_path="./datasets", txt_path="test/scut_head.txt",train=False)
-val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
+val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
 
 
 # config file
@@ -64,26 +64,40 @@ kwargs['box_detections_per_img'] = 300  # increase max det to max val in our ben
 # define model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 model = customRCNN(cfg=cfg,
-                        use_deform=NET_CONFIG['use_deform'],
                         ohem=NET_CONFIG['ohem'],
                         context=NET_CONFIG['context'],
-                        custom_sampling=NET_CONFIG['custom_sampling'],
                         default_filter=False,
                         soft_nms=NET_CONFIG['soft_nms'],
                         upscale_rpn=NET_CONFIG['upscale_rpn'],
                         median_anchors=NET_CONFIG['median_anchors'],
                         **kwargs).cuda()
 
-# modify model
-num_classes = 2
-in_features = model.roi_heads.box_predictor.cls_score.in_features
-model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+# state_dict = torch.load('/home/choi/hwang/workspace/etri/output_weights/FT_R50_epoch_24.pth', map_location=device)
+# new_state_dict = {}
+# for k, v in state_dict.items():
+#     new_key = k.replace("module.", "")  # 앞에 "module."만 제거
+#     new_state_dict[new_key] = v
+# for k in model.state_dict().keys():
+#     print(k)
+# print("-="*50)
+# for k in state_dict.keys():
+#     print(k)
+# model.load_state_dict(new_state_dict, strict=True)
+
+
+
+# model = fasterrcnn_resnet50_fpn(pretrained_backbone=True)
+#
+# # modify model
+# in_features = model.roi_heads.box_predictor.cls_score.in_features
+# model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 2)
 
 # load model
 model.load_state_dict(torch.load(args.model_path))
 model.eval()
 model.to(device)
 
+# print(model)
 # results
 pred_dict = defaultdict(list)
 gt_dict = defaultdict(list)

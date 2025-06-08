@@ -22,7 +22,6 @@ from .config import cfg_res50_4fpn as cfg
 from .nms import soft_nms_pytorch
 
 import pdb
-from pdb import set_trace
 
 
 class FasterRCNN(GeneralizedRCNN):
@@ -72,7 +71,6 @@ class FasterRCNN(GeneralizedRCNN):
         out_channels = backbone.out_channels
 
         if rpn_anchor_generator is None:
-            # anchor 설정을 바르게 하라고 경고문을 넣을까?
             anchor_sizes = ((32,), (64,), (128,), (256,), (512,))
             aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
             rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios)
@@ -154,7 +152,6 @@ class GeneralizedRCNNTransform(nn.Module):
         self.max_size = max_size
 
 
-
     def forward(self, images, targets=None):
         for i in range(len(images)):
             image = images[i]
@@ -171,6 +168,7 @@ class GeneralizedRCNNTransform(nn.Module):
         image_sizes = [img.shape[-2:] for img in images]
         images = self.batch_images(images)
         image_list = ImageList(images, image_sizes)
+
         return image_list, targets
 
 

@@ -46,12 +46,20 @@ def soft_nms_pytorch(dets, box_scores, sigma=0.25, thresh=0.001, cuda=True):
                 scores[i], scores[maxpos.item() + i + 1] = scores[maxpos.item() + i + 1].clone(), scores[i].clone()
                 areas[i], areas[maxpos + i + 1] = areas[maxpos + i + 1].clone(), areas[i].clone()
 
+        # # IoU calculate
+        # yy1 = np.maximum(dets[i, 0].to("cpu").numpy(), dets[pos:, 0].to("cpu").numpy())
+        # xx1 = np.maximum(dets[i, 1].to("cpu").numpy(), dets[pos:, 1].to("cpu").numpy())
+        # yy2 = np.minimum(dets[i, 2].to("cpu").numpy(), dets[pos:, 2].to("cpu").numpy())
+        # xx2 = np.minimum(dets[i, 3].to("cpu").numpy(), dets[pos:, 3].to("cpu").numpy())
+
         # IoU calculate
-        yy1 = np.maximum(dets[i, 0].to("cpu").numpy(), dets[pos:, 0].to("cpu").numpy())
-        xx1 = np.maximum(dets[i, 1].to("cpu").numpy(), dets[pos:, 1].to("cpu").numpy())
-        yy2 = np.minimum(dets[i, 2].to("cpu").numpy(), dets[pos:, 2].to("cpu").numpy())
-        xx2 = np.minimum(dets[i, 3].to("cpu").numpy(), dets[pos:, 3].to("cpu").numpy())
-        
+        dets_cpu = dets.detach().cpu().numpy()
+
+        yy1 = np.maximum(dets_cpu[i, 0], dets_cpu[pos:, 0])
+        xx1 = np.maximum(dets_cpu[i, 1], dets_cpu[pos:, 1])
+        yy2 = np.minimum(dets_cpu[i, 2], dets_cpu[pos:, 2])
+        xx2 = np.minimum(dets_cpu[i, 3], dets_cpu[pos:, 3])
+
         w = np.maximum(0.0, xx2 - xx1 + 1)
         h = np.maximum(0.0, yy2 - yy1 + 1)
         inter = torch.tensor(w * h).cuda() if cuda else torch.tensor(w * h)
