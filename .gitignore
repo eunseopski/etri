@@ -6,5 +6,10 @@ output_weights/
 reference/
 wandb/
 
+make_pseudoGT/dataset
+make_pseudoGT/headpose_visualized
+make_pseudoGT/headpose_visualized_128x128
+make_pseudoGT/weight
+
 datasets/train/scut_head*.txt
 *_log.txt
