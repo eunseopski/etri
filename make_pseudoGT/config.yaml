@@ -1,0 +1,11 @@
+agora_root: "/home/choi/hwang/workspace/etri/make_pseudoGT/dataset/full_range_head/AGORA"
+cmu_root: "/home/choi/hwang/workspace/etri/make_pseudoGT/dataset/full_range_head/CMU-Panoptic"
+img_size: 224
+batch_size: 64
+num_workers: 4
+seed: 42
+milestones: [10, 20]
+gamma: 0.1
+lr: 0.00001
+num_epochs: 30
+save_path: './weight'
