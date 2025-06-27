@@ -15,6 +15,9 @@ from model.utils import set_seed,compute_rotation_matrix_from_euler, compute_eul
 
 import pdb
 
+# cd etri/make_pseudoGT
+# python train.py --config config.py
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True, help="path to data.yaml")
 args = parser.parse_args()
@@ -48,6 +51,7 @@ crit = GeodesicLoss().to(device)
 optimizer = torch.optim.Adam(model.parameters(), cfg['lr'])
 scheduler = torch.optim.lr_scheduler.MultiStepLR(
     optimizer, milestones=cfg['milestones'], gamma=cfg['gamma'])
+
 
 best_loss = float('inf')
 best_loss_path = ""

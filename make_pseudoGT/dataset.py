@@ -77,21 +77,17 @@ import torch
 from torch.utils.data import Dataset
 
 class HeadDataset(Dataset):
-    """
-    class, cx, cy, w, h, pitch, yaw, roll (모두 0~1 정규화) 포맷의 YOLO txt를 사용하는 데이터셋
-    """
 
     def __init__(self, root, img_size=128, train=True, transform=None):
         self.img_size  = img_size
         self.transform = transform
 
-        split = "train" if train else "validation"   # ← 여기!
+        split = "train" if train else "validation"
         self.img_dir   = os.path.join(root, split, "images")
         self.label_dir = os.path.join(root, split, "labels")
 
         # 1) 이미지 경로 수집
         self.img_files = sorted(glob.glob(os.path.join(self.img_dir, "*.jpg")))
-        assert self.img_files, f"'{self.img_dir}'에 이미지가 없어!"
 
         # 2) 라벨 경로 매핑
         self.label_files = [
@@ -104,10 +100,10 @@ class HeadDataset(Dataset):
         return len(self.img_files)
 
     def __getitem__(self, idx):
+
         # 1) 이미지 로드
         img_path = self.img_files[idx]
         img = cv2.imread(img_path)
-        assert img is not None, f"이미지 로딩 실패: {img_path}"
 
         # 2) 라벨 로드 (pitch, yaw, roll 한 줄)
         lbl_path = self.label_files[idx]
@@ -119,7 +115,7 @@ class HeadDataset(Dataset):
         img = torch.from_numpy(img.transpose(2, 0, 1)).float() / 255.0
 
         if self.transform:
-            img = self.transform(img)  # transforms.Normalize 적용됨
+            img = self.transform(img)  # Normalize 적용
 
         labels = torch.from_numpy(labels)
 
