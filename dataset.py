@@ -163,7 +163,7 @@ class HeadDataset(Dataset):
                         # A.RandomSizedBBoxSafeCrop(width=self.shape[1],
                         #                           height=self.shape[0],
                         #                           erosion_rate=0., p=0.2), self.dataset_param
-                        A.Resize(self.dataset_param[0], self.dataset_param[1]),
+                        # A.Resize(self.dataset_param[0], self.dataset_param[1]),
                         A.RGBShift(),
                         A.RandomBrightnessContrast(p=0.5),
                         A.HorizontalFlip(p=0.5),

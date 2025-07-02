@@ -70,19 +70,20 @@ kwargs['box_detections_per_img'] = 100  # increase max det to max val in our ben
 # Model
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-model = fasterrcnn_resnet50_fpn(pretrained_backbone=True, weights = None)
-in_features = model.roi_heads.box_predictor.cls_score.in_features # 1024
-model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=2)
+# model = fasterrcnn_resnet50_fpn(pretrained_backbone=True, weights = None)
+# in_features = model.roi_heads.box_predictor.cls_score.in_features # 1024
+# model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=2)
 
-# model = customRCNN(cfg=cfg,
-#                         ohem=NET_CONFIG['ohem'],
-#                         context=NET_CONFIG['context'],
-#                         default_filter=False,
-#                         soft_nms=NET_CONFIG['soft_nms'],
-#                         upscale_rpn=NET_CONFIG['upscale_rpn'],
-#                         median_anchors=NET_CONFIG['median_anchors'],
-#                         **kwargs).cuda()
+model = customRCNN(cfg=cfg,
+                        ohem=NET_CONFIG['ohem'],
+                        context=NET_CONFIG['context'],
+                        default_filter=False,
+                        soft_nms=NET_CONFIG['soft_nms'],
+                        upscale_rpn=NET_CONFIG['upscale_rpn'],
+                        median_anchors=NET_CONFIG['median_anchors'],
+                        **kwargs).cuda()
 print(model)
+pdb.set_trace()
 if TRAIN_CONFIG['pretrained_model']:
     state_dict = torch.load(TRAIN_CONFIG['pretrained_model'], map_location=device)
     new_state_dict = {}

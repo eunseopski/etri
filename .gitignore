@@ -5,11 +5,16 @@ __pycache__/
 output_weights/
 reference/
 wandb/
+confg/*.yaml
 
-make_pseudoGT/dataset
-make_pseudoGT/headpose_visualized
-make_pseudoGT/headpose_visualized_128x128
+make_pseudoGT/dataset/AGORA-HPE
+make_pseudoGT/dataset/CMU-HPE
+make_pseudoGT/dataset/full_range_head
+
+make_pseudoGT/headpose_visualized_AGORA_128x128
+make_pseudoGT/headpose_visualized_CMU_128x128
 make_pseudoGT/weight
+make_pseudoGT/wandb
 
 datasets/train/scut_head*.txt
 *_log.txt
