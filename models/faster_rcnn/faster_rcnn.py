@@ -250,6 +250,17 @@ class GeneralizedRCNNTransform(nn.Module):
                 result[i]["keypoints"] = keypoints
         return result
 
+    def __repr__(self) -> str:
+        format_string = f"{self.__class__.__name__}("
+        _indent = "\n    "
+
+        mean_str = "[" + ", ".join(f"{v:.3f}" for v in self.image_mean) + "]"
+        std_str = "[" + ", ".join(f"{v:.3f}" for v in self.image_std) + "]"
+        format_string += f"{_indent}Normalize(mean={mean_str}, std={std_str})"
+        format_string += f"{_indent}Resize(min_size={self.min_size}, max_size={self.max_size}, mode='bilinear')"
+        format_string += "\n)"
+        return format_string
+
 
 def resize_boxes(boxes, original_size, new_size):
     ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(new_size, original_size))

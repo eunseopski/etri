@@ -1,5 +1,4 @@
 import torch.nn as nn
-from model.utils import compute_rotation_matrix_from_euler
 import torch
 import torch.nn.functional as F
 
@@ -28,43 +27,65 @@ def compute_mawe(pred_deg, target_deg):
     """
     diff = torch.abs(pred_deg - target_deg)
     wrapped_diff = torch.minimum(diff, 360.0 - diff)
-    return torch.mean(wrapped_diff)  # 전체 평균 (pitch, yaw, roll 포함)
+    total_mae = torch.mean(wrapped_diff)  # 전체 평균
+    return total_mae
 
 
 def compute_maev(pred_rot, gt_rot, eps=1e-6):
     """
-    MAEV: Mean Absolute Error of Vectors (3-axis 평균 버전)
-    회전행렬의 3개 축 벡터를 각각 비교해 평균 오차를 구함.
+    MAEV: Mean Angular Error of Vectors (degree)
+    회전행렬의 3축 벡터를 평균 각도 오차로 계산.
 
     Args:
-        pred_rot (Tensor): [B, 3, 3], 예측 회전 행렬
-        gt_rot   (Tensor): [B, 3, 3], GT 회전 행렬
-        eps (float): 안정성 위한 epsilon
+        pred_rot (Tensor): [B, 3, 3]
+        gt_rot   (Tensor): [B, 3, 3]
+        eps (float): 안정성용 epsilon
 
     Returns:
-        maev (Tensor): 평균 각도 차이 (degree)
+        maev (Tensor): scalar (degree)
     """
     axis_errors = []
 
     for axis in range(3):
-        pred_v = pred_rot[:, :, axis]  # [B, 3]
+        pred_v = pred_rot[:, :, axis]
         gt_v   = gt_rot[:, :, axis]
 
-        # 정규화
-        pred_v = F.normalize(pred_v, dim=1)
-        gt_v   = F.normalize(gt_v, dim=1)
+        pred_v = F.normalize(pred_v, dim=1, eps=eps)
+        gt_v   = F.normalize(gt_v, dim=1, eps=eps)
 
-        # 벡터 사이 각도
-        cos_sim = torch.sum(pred_v * gt_v, dim=1)  # [B]
-        cos_sim = torch.clamp(cos_sim, -1 + eps, 1 - eps)
-
-        angle = torch.acos(cos_sim)  # [B], radian
+        cos_sim = torch.sum(pred_v * gt_v, dim=1).clamp(-1.0, 1.0)
+        angle = torch.acos(cos_sim)  # radian
         axis_errors.append(angle)
 
-    # 3축의 평균
     axis_errors = torch.stack(axis_errors, dim=1)  # [B, 3]
-    mean_error_per_sample = torch.mean(axis_errors, dim=1)  # [B]
-    maev_radian = torch.mean(mean_error_per_sample)  # scalar
+    mean_error_per_sample = axis_errors.mean(dim=1)  # [B]
+    maev_degree = torch.rad2deg(mean_error_per_sample).mean()  # scalar
 
-    maev_degree = torch.rad2deg(maev_radian)
+    return maev_degree
+
+def compute_symmetric_maev(pred_rot, gt_rot, eps=1e-6):
+    """
+    Symmetry-aware MAEV
+    pred_rot, gt_rot: [B, 3, 3]
+    """
+    axis_errors = []
+
+    for axis in range(3):
+        pred_v = pred_rot[:, :, axis]
+        gt_v   = gt_rot[:, :, axis]
+
+        pred_v = F.normalize(pred_v, dim=1, eps=eps)
+        gt_v   = F.normalize(gt_v, dim=1, eps=eps)
+
+        # dot product
+        cos_sim = torch.sum(pred_v * gt_v, dim=1).clamp(-1.0, 1.0)
+        # 축 뒤집힘까지 고려
+        cos_sim_sym = torch.abs(cos_sim)
+
+        angle = torch.acos(cos_sim_sym)
+        axis_errors.append(angle)
+
+    axis_errors = torch.stack(axis_errors, dim=1)
+    mean_error_per_sample = axis_errors.mean(dim=1)
+    maev_degree = torch.rad2deg(mean_error_per_sample).mean()
     return maev_degree

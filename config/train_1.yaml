@@ -3,60 +3,42 @@ DATASET:
     train: 'train/scut_head.txt'
     valid: 'valid/scut_head.txt'
 
-    mean_std: [[118.14, 110.79, 104.97], [64.45, 64.44, 65.16]]
-    max_size: 1000
+    mean_std: [[117, 110, 105], [67.10, 65.45, 66.23]]
+    max_size: 1100
+#    max_size: 1333
     min_size: 600
+#    min_size: 800
 
 
 TRAINING:
-    exp_name: 'SCUT_HDHT_ori_faster_rcnn_anchor4'
+    exp_name: 'SCUT_origin_FR_scutanchor'
     backbone : 'resnet50'
     pretrained_model: ''
     save_dir: '/home/choi/hwang/workspace/HeadHunter/output_weights'
     start_eval: 1
     eval_period: 1
     max_epoch: 30
-    AMP: True
+    AMP: False
 
 HYPER_PARAM:
     learning_rate: 0.01
     momentum: 0.9
     weight_decay: 0.0005
-    gamma: 0.5
-    milestones: [5, 10, 15]
-    batch_size: 4
+    gamma: 0.1
+    milestones: [10, 20, 25]
+    batch_size: 2
 
 
 NETWORK:
-    ohem: False
-    context: # cpm, deform_ssh, ssh
+    ohem: True
+    context: cpm # cpm, deform_ssh, ssh
     soft_nms: False
     upscale_rpn: False
-    median_anchors: True # comb_anchors = ((12,), (32,), (64,), (112,))  # 4개의 anchor로 설정
-#    anchors:
-#      - [12]
-#      - [32]
-#      - [112]
-#      - [256]
-#    anchors:
-#      - [18]
-#      - [36]
-#      - [72]
-#      - [128]
+    median_anchors: True
     anchors:
-        - [32]
-        - [64]
-        - [128]
-        - [256]
-#    anchors:
-#        - [12]
-#        - [32]
-#        - [64]
-#        - [112]
-#    anchors:
-#        - [12, 32]
-#        - [64, 112]
-#        - [196, 256]
-#        - [384, 512]
+      - [18]
+      - [36]
+      - [72]
+      - [128]
     aspect_ratios:
       - [0.5, 1.0, 1.5]

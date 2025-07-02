@@ -16,12 +16,12 @@ def create_backbone(cfg, context=None, default_filter=False):
     in_channels = cfg['in_channel']    
     if cfg['name'] == 'Resnet50':
 
-        feat_ext = models.resnet50(pretrained=cfg['pretrain'])
+        # feat_ext = models.resnet50(pretrained=cfg['pretrain'])
 
-        # feat_ext = models.resnet50(
-        #     pretrained=cfg['pretrain'],
-        #     norm_layer=misc_nn_ops.FrozenBatchNorm2d
-        # )
+        feat_ext = models.resnet50(
+            pretrained=cfg['pretrain'],
+            norm_layer=misc_nn_ops.FrozenBatchNorm2d
+        )
         if len(cfg['return_layers']) == 3:
             in_channels_list = [
                 in_channels * 2,
